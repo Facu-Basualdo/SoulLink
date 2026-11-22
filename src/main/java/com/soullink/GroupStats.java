@@ -173,7 +173,7 @@ public class GroupStats extends SavedData {
 			Codec.unboundedMap(UUIDUtil.STRING_CODEC, PlayerStats.CODEC).optionalFieldOf("players", Map.of()).forGetter(stats -> stats.players)
 	).apply(instance, GroupStats::new));
 
-	private static final SavedDataType<GroupStats> TYPE = new SavedDataType<>(SoulLink.id("stats"), GroupStats::new, CODEC, null);
+	private static final SavedDataType<GroupStats> TYPE = new SavedDataType<>(SoulLink.MOD_ID + "_stats", GroupStats::new, CODEC, null);
 
 	private final Map<String, Run> runs = new HashMap<>();
 	// Por jugador y no por grupo: si alguien cambia de grupo, sus culpas van con él.
@@ -190,7 +190,7 @@ public class GroupStats extends SavedData {
 	}
 
 	public static GroupStats get(MinecraftServer server) {
-		return server.getDataStorage().computeIfAbsent(TYPE);
+		return server.overworld().getDataStorage().computeIfAbsent(TYPE);
 	}
 
 	/** END_SERVER_TICK: el reloj de cada grupo corre mientras alguno de sus jugadores esté jugando. */

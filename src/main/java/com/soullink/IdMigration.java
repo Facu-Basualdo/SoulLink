@@ -5,8 +5,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.level.storage.LevelResource;
 
 /**
  * Hasta la 1.2.1 el id del mod era {@code inventariocompartido}, y el estado compartido se guardaba en
@@ -15,17 +13,8 @@ import net.minecraft.world.level.storage.LevelResource;
  */
 public final class IdMigration {
 	static final String OLD_ID = "inventariocompartido";
-	private static final String FILE = "shared_inventory.dat";
 
 	private IdMigration() {
-	}
-
-	/** SERVER_STARTING: corre antes de que se carguen los mundos, así que nadie leyó todavía el archivo. */
-	public static void migrateWorldData(MinecraftServer server) {
-		Path data = server.getWorldPath(LevelResource.DATA);
-		if (moveIfMissing(data.resolve(OLD_ID).resolve(FILE), data.resolve(SoulLink.MOD_ID).resolve(FILE))) {
-			SoulLink.LOGGER.info("Se movió {} de data/{} a data/{} (el id del mod cambió)", FILE, OLD_ID, SoulLink.MOD_ID);
-		}
 	}
 
 	/**

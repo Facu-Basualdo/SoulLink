@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "com.soullink.test.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"CanalesDeJugadoresDePruebaMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

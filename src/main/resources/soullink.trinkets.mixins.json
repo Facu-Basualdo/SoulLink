@@ -2,7 +2,7 @@
 	"required": true,
 	"package": "com.soullink.mixin.trinkets",
 	"plugin": "com.soullink.mixin.trinkets.TrinketsMixinPlugin",
-	"compatibilityLevel": "JAVA_25",
+	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"TrinketInventoryAccessor",
 		"TrinketInventoryImplMixin",

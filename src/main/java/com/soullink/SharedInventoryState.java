@@ -56,7 +56,7 @@ public class SharedInventoryState extends SavedData {
 
 	// DataFixTypes null: Fabric API se encarga de que no se intente aplicar data fixers a datos de mods.
 	private static final SavedDataType<SharedInventoryState> TYPE = new SavedDataType<>(
-			SoulLink.id("shared_inventory"), SharedInventoryState::new, CODEC, null);
+			SoulLink.MOD_ID + "_shared_inventory", SharedInventoryState::new, CODEC, null);
 
 	// Estado del servidor que está corriendo ahora. Lo usan los mixins que no tienen acceso al servidor.
 	private static @Nullable SharedInventoryState active;
@@ -94,7 +94,7 @@ public class SharedInventoryState extends SavedData {
 	}
 
 	public static SharedInventoryState get(MinecraftServer server) {
-		SharedInventoryState state = server.getDataStorage().computeIfAbsent(TYPE);
+		SharedInventoryState state = server.overworld().getDataStorage().computeIfAbsent(TYPE);
 		active = state;
 		return state;
 	}

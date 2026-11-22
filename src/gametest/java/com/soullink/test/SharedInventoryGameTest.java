@@ -2,6 +2,7 @@ package com.soullink.test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -15,9 +16,8 @@ import com.soullink.LinkGroups;
 import com.soullink.SharedInventoryState;
 import com.soullink.StatsScoreboard;
 
-import eu.pb4.trinkets.api.DefaultTrinketSlots;
-import eu.pb4.trinkets.api.TrinketInventory;
-import eu.pb4.trinkets.api.TrinketsApi;
+import dev.emi.trinkets.api.TrinketInventory;
+import dev.emi.trinkets.api.TrinketsApi;
 
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 
@@ -43,7 +43,7 @@ import net.minecraft.world.entity.EntityEquipment;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.entity.player.Player;
@@ -241,7 +241,7 @@ public class SharedInventoryGameTest {
 					b.setHealth(9);
 
 					// Matar un monstruo le suma al que lo mató
-					Zombie zombie = EntityTypes.ZOMBIE.create(helper.getLevel(), EntitySpawnReason.COMMAND);
+					Zombie zombie = EntityType.ZOMBIE.create(helper.getLevel(), EntitySpawnReason.COMMAND);
 					BlockPos zombiePos = helper.absolutePos(new BlockPos(3, 1, 3));
 					zombie.setPos(zombiePos.getX() + 0.5, zombiePos.getY(), zombiePos.getZ() + 0.5);
 					helper.getLevel().addFreshEntity(zombie);
@@ -389,8 +389,8 @@ public class SharedInventoryGameTest {
 					// Con Trinkets Updated los slots de Trinkets se comparten igual que la armadura
 					ServerPlayer c = joinSurvivalPlayer(helper, "trinkets-c");
 					ServerPlayer d = joinSurvivalPlayer(helper, "trinkets-d");
-					TrinketInventory backC = TrinketsApi.getAttachment(c).getInventory(DefaultTrinketSlots.CHEST_BACK);
-					helper.assertTrue(backC != null && TrinketsApi.getAttachment(d).getInventory(DefaultTrinketSlots.CHEST_BACK) != null,
+					TrinketInventory backC = back(c);
+					helper.assertTrue(backC != null && back(d) != null,
 							Component.literal("Los jugadores tienen el slot de espalda (data de prueba en src/gametest/resources)"));
 					backC.clearContent();
 					backC.setItem(0, new ItemStack(Items.ELYTRA));
@@ -402,14 +402,16 @@ public class SharedInventoryGameTest {
 					CompoundTag oldSave = output.buildResult();
 					oldSave.remove("UUID");
 					backC.setItem(0, new ItemStack(Items.TOTEM_OF_UNDYING));
-					d.load(TagValueInput.create(ProblemReporter.DISCARDING, d.registryAccess(), oldSave));
+					// Una copia en cada carga: Cardinal Components (con el que Trinkets guarda en 1.21.x) consume su clave
+					// del tag al leerlo, y en un login de verdad cada carga lee el archivo de nuevo
+					d.load(TagValueInput.create(ProblemReporter.DISCARDING, d.registryAccess(), oldSave.copy()));
 					helper.assertTrue(back(c).getItem(0).is(Items.TOTEM_OF_UNDYING) && back(d).getItem(0) == back(c).getItem(0),
 							Component.literal("Cargar un guardado de D no pisa el slot compartido"));
 					helper.assertTrue(world.takeRescuedItems(d.getGameProfile().id()).isEmpty(), Component.literal("Un guardado con la marca no rescata nada"));
 
 					// Un archivo de antes de compartir los trinkets: lo suyo va al cofre, no a lo compartido
 					oldSave.remove("SoulLinkTrinkets");
-					d.load(TagValueInput.create(ProblemReporter.DISCARDING, d.registryAccess(), oldSave));
+					d.load(TagValueInput.create(ProblemReporter.DISCARDING, d.registryAccess(), oldSave.copy()));
 					helper.assertTrue(back(c).getItem(0).is(Items.TOTEM_OF_UNDYING), Component.literal("Un guardado sin la marca tampoco pisa el slot"));
 					helper.assertTrue(world.takeRescuedItems(d.getGameProfile().id()).stream().anyMatch(stack -> stack.is(Items.ELYTRA)),
 							Component.literal("La elytra del guardado sin la marca queda para el cofre"));
@@ -454,8 +456,11 @@ public class SharedInventoryGameTest {
 		return player;
 	}
 
-	private static TrinketInventory back(ServerPlayer player) {
-		return TrinketsApi.getAttachment(player).getInventory(DefaultTrinketSlots.CHEST_BACK);
+	/** El slot de espalda (grupo "chest", slot "back"), o null si el jugador no lo tiene. */
+	private static @Nullable TrinketInventory back(ServerPlayer player) {
+		return TrinketsApi.getTrinketComponent(player)
+				.map(component -> component.getInventory().getOrDefault("chest", Map.of()).get("back"))
+				.orElse(null);
 	}
 
 	private static List<ChestBlockEntity> chestsAround(ServerPlayer player) {

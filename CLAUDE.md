@@ -1,8 +1,19 @@
 # Soul Link — mod de Minecraft
 
-Mod de Fabric para **Minecraft Java 26.3** que hace que los jugadores vinculados compartan en tiempo real un único inventario (inventario, barra rápida, armadura y mano secundaria), una sola barra de hambre, una sola barra de vida y una sola barra de experiencia. Por defecto todos están vinculados; con `/soullink grupo` se arman grupos separados (2 y 2, o como se quiera), y cada grupo comparte lo suyo. Java 25, Gradle 9.7 + Fabric Loom 1.18, Fabric Loader 0.19.5, Fabric API 0.162.0+26.3. Toda la lógica corre en el servidor; `src/client` es sólo la pantalla de configuración de Mod Menu, opcional.
+Mod de Fabric para **Minecraft Java 1.21.11** (backport de la rama `main`, que es 26.3) que hace que los jugadores vinculados compartan en tiempo real un único inventario (inventario, barra rápida, armadura y mano secundaria), una sola barra de hambre, una sola barra de vida y una sola barra de experiencia. Por defecto todos están vinculados; con `/soullink grupo` se arman grupos separados (2 y 2, o como se quiera), y cada grupo comparte lo suyo. Java 21 (Gradle corre con el 25), Gradle 9.7 + Fabric Loom Remap 1.18.4 con los mappings oficiales de Mojang, Fabric Loader 0.18.4, Fabric API 0.141.6+1.21.11. Toda la lógica corre en el servidor; `src/client` es sólo la pantalla de configuración de Mod Menu, opcional.
 
 **El id del mod es `soullink` desde la 2.0.0 (antes `inventariocompartido`).** Lo guardado con el id viejo se pasa solo al arrancar: ver [migración del id](claude/mod/migracion-de-id.md). No lo vuelvas a cambiar sin una migración, y no renombres la marca `InventarioCompartido` del archivo de cada jugador.
+
+## Diferencias con 26.3 (rama `main`)
+
+Para portar un cambio de `main`, aplicalo, compilá y corré `runGameTest`. Lo que cambia en esta rama:
+
+- **Build:** `net.fabricmc.fabric-loom-remap` con `mappings loom.officialMojangMappings()` (1.21.11 viene ofuscado), dependencias con `modImplementation`/`modCompileOnly`, Java 21 y `compatibilityLevel` `JAVA_21` en los mixins. Gradle sigue corriendo con el JDK 25.
+- **Renombres de 26.x:** `ContainerInput` → `ClickType`, `PayloadTypeRegistry.playS2C()/playC2S()`, `EntityType` en vez de `EntityTypes`, `Minecraft.screen`/`setScreen` en vez de `gui`, `GuiGraphics`/`render…` en vez de `GuiGraphicsExtractor`/`extract…`, `KeyBindingHelper`, `InputConstants.Type.KEYSYM`, `Items.GRAY_STAINED_GLASS_PANE` y similares.
+- **SavedData:** el id es un `String` que se usa de nombre de archivo (`data/<mod>_<nombre>.dat`) y el almacenamiento es el del overworld. La migración de datos de mundo del id viejo se sacó: ningún mundo de 1.21.x se guardó con él.
+- **Gametests de cliente:** la API de 1.21.11 no espera paquetes (`waitForClientboundPackets`): se esperan unos ticks.
+- **Trinkets:** Trinkets Updated para 1.21.11 (3.11) es la API vieja `dev.emi.trinkets`, con Cardinal Components: una sola lista por slot, sin cosmética. `SharedTrinkets` engancha `TrinketInventory.stacks` (la lista cosmética de `TrinketSlotLists` queda vacía). Cardinal Components va como `modCompileOnly` y, en los tests, también en runtime (Loom no carga los jars anidados de Trinkets).
+- **Tests:** `CanalesDeJugadoresDePruebaMixin` (sólo en los tests) hace que los jugadores falsos "tengan" todos los canales, porque Cardinal Components echa a quien no puede recibir su sync. El test de Trinkets carga una copia del tag en cada `load` (Cardinal Components consume su clave).
 
 ## Cómo obtener contexto
 

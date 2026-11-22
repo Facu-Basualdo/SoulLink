@@ -34,7 +34,7 @@ public class ConfigScreenClientGameTest implements FabricClientGameTest {
 		// Los campos se buscan por su nombre en español: el cliente de prueba arranca en inglés
 		context.runOnClient(client -> client.getLanguageManager().setSelected("es_ar"));
 		try (TestSingleplayerContext world = context.worldBuilder().create()) {
-			world.getConnection().waitForChunksRender();
+			world.getClientWorld().waitForChunksRender();
 			context.getInput().setCursorPos(0, 0);
 			if (world.getServer().computeOnServer(server -> server.getScoreboard().getDisplayObjective(DisplaySlot.SIDEBAR) != null)) {
 				throw new AssertionError("Por defecto la barra lateral tenía que arrancar vacía");
@@ -52,7 +52,7 @@ public class ConfigScreenClientGameTest implements FabricClientGameTest {
 					.onPress(new KeyEvent(InputConstants.KEY_RETURN, 0, 0)));
 			context.runOnClient(client -> field(client, "Corazones de un susto").setValue("1,5"));
 			context.clickScreenButton("Guardar");
-			context.waitFor(client -> client.gui.screen() == null);
+			context.waitFor(client -> client.screen == null);
 			boolean applied = world.getServer().computeOnServer(server -> SoulLink.config().sidebar().equals(Optional.of(GroupStats.Stat.FAULTS))
 					&& SoulLink.config().scareHearts() == 1.5
 					&& server.getScoreboard().getDisplayObjective(DisplaySlot.SIDEBAR) != null);
@@ -68,7 +68,7 @@ public class ConfigScreenClientGameTest implements FabricClientGameTest {
 			context.runOnClient(client -> field(client, "Corazones de un susto").setValue("50"));
 			context.clickScreenButton("Guardar");
 			context.waitTicks(10);
-			if (!context.computeOnClient(client -> client.gui.screen() instanceof SoulLinkConfigScreen)) {
+			if (!context.computeOnClient(client -> client.screen instanceof SoulLinkConfigScreen)) {
 				throw new AssertionError("Con un valor rechazado la pantalla tenía que quedar abierta, con el aviso");
 			}
 			context.takeScreenshot("config-rechazada");
@@ -90,7 +90,7 @@ public class ConfigScreenClientGameTest implements FabricClientGameTest {
 	/** Los de la lista están adentro del contenedor con scroll, no en la pantalla directamente. */
 	private static <T> List<T> widgets(Minecraft client, Class<T> type) {
 		List<T> found = new ArrayList<>();
-		for (GuiEventListener child : client.gui.screen().children()) {
+		for (GuiEventListener child : client.screen.children()) {
 			visit(child, type, found);
 		}
 		return found;

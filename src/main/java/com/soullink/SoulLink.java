@@ -38,7 +38,6 @@ public class SoulLink implements ModInitializer {
 		}
 
 		// Antes que todo: con el id viejo, el estado compartido está en otra carpeta
-		ServerLifecycleEvents.SERVER_STARTING.register(IdMigration::migrateWorldData);
 
 		// El primer jugador que entra al mundo (con el mod recién instalado) aporta su inventario
 		// como punto de partida. A partir de ahí, el inventario compartido es la única fuente de verdad.

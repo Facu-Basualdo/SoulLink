@@ -1,5 +1,5 @@
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
 }
 
 repositories {
@@ -15,6 +15,18 @@ repositories {
 		}
 		filter {
 			includeGroup "maven.modrinth"
+		}
+	}
+	// Cardinal Components: la API vieja de Trinkets (1.21.x) guarda los slots en un componente suyo
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Ladysnake"
+				url = "https://maven.ladysnake.org/releases"
+			}
+		}
+		filter {
+			includeGroup "org.ladysnake.cardinal-components-api"
 		}
 	}
 }
@@ -45,16 +57,21 @@ loom {
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	// Esta versión de Minecraft todavía viene ofuscada: con los nombres oficiales de Mojang el código queda igual
+	// que en la rama de 26.x
+	mappings loom.officialMojangMappings()
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	// Fabric API
-	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
 	// Mod Menu es opcional: sólo para compilar ModMenuIntegration, que Mod Menu carga si está instalado
-	compileOnly "maven.modrinth:modmenu:${project.modmenu_version}"
+	modCompileOnly "maven.modrinth:modmenu:${project.modmenu_version}"
 
 	// Trinkets Updated es opcional: con él se comparten también sus slots (com.soullink.trinkets). Las pruebas corren con él.
-	compileOnly "maven.modrinth:trinkets-updated:${project.trinkets_version}"
+	modCompileOnly "maven.modrinth:trinkets-updated:${project.trinkets_version}"
+	// Trinkets lo trae adentro de su jar, pero para compilar contra su API hace falta verlo
+	modCompileOnly "org.ladysnake.cardinal-components-api:cardinal-components-base:7.3.0"
 }
 
 processResources {
@@ -67,7 +84,7 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 25
+	it.options.release = 21
 }
 
 // MIT pide que el aviso de copyright viaje con cada copia, y el jar es la copia que circula.
@@ -78,8 +95,8 @@ jar {
 java {
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
 }
 
 // Pruebas automáticas dentro del juego (src/gametest): gradlew runGameTest (servidor sin ventana) y
@@ -96,7 +113,10 @@ fabricApi {
 
 // Las pruebas corren con Trinkets Updated para probar que sus slots también se comparten
 dependencies {
-	gametestImplementation "maven.modrinth:trinkets-updated:${project.trinkets_version}"
+	modGametestImplementation "maven.modrinth:trinkets-updated:${project.trinkets_version}"
+	// En desarrollo Loom no carga los jars que Trinkets trae adentro
+	modGametestImplementation "org.ladysnake.cardinal-components-api:cardinal-components-base:7.3.0"
+	modGametestImplementation "org.ladysnake.cardinal-components-api:cardinal-components-entity:7.3.0"
 }
 
 // El cliente de prueba guarda su config en build/run/clientGameTest y no la pisa: la prueba de la pantalla de

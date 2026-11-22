@@ -16,6 +16,9 @@
 			"com.soullink.test.ConfigScreenClientGameTest"
 		]
 	},
+	"mixins": [
+		"soullink-test.mixins.json"
+	],
 	"depends": {
 		"soullink": "*"
 	}
