@@ -34,7 +34,7 @@ public abstract class AbstractContainerMenuMixin {
 	private void soullink$holdToolWhileMining(int slotIndex, ItemStack stack, Supplier<ItemStack> copy, CallbackInfo ci) {
 		Slot slot = this.slots.get(slotIndex);
 		if (slot.container instanceof Inventory inventory
-				&& slot.getContainerSlot() == inventory.getSelectedSlot()
+				&& slot.getContainerSlot() == inventory.selected
 				&& inventory.player instanceof ServerPlayer player
 				&& ((BlockMiner) player.gameMode).soullink$isMiningWith(stack)) {
 			ci.cancel();

@@ -8,7 +8,7 @@ import com.soullink.mixin.ServerPlayerAccessor;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.world.level.GameRules;
 
 /**
  * Reparte una única barra de experiencia entre los jugadores de cada grupo vinculado.
@@ -78,7 +78,7 @@ public final class SharedExperience {
 		}
 		for (int i = 0; i < newcomers.size(); i++) {
 			ServerPlayer newcomer = newcomers.get(i);
-			boolean preMod = world.takeExperienceContribution(newcomer.getGameProfile().id());
+			boolean preMod = world.takeExperienceContribution(newcomer.getGameProfile().getId());
 			if (preMod || (unknown && !anySynced && i == 0)) {
 				points += pointsOf(newcomer);
 				score += newcomer.totalExperience;
@@ -104,7 +104,7 @@ public final class SharedExperience {
 	/** Muere el grupo: como en vanilla, se pierde la experiencia salvo con keepInventory. */
 	static void onGroupDeath(LinkGroup state, ServerPlayer victim) {
 		state.syncedExperience().clear();
-		if (!victim.level().getGameRules().get(GameRules.KEEP_INVENTORY)) {
+		if (!victim.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
 			state.setExperience(0, 0);
 		}
 	}

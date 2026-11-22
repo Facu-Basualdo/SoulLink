@@ -8,8 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.soullink.mixin.EntityEquipmentAccessor;
 import com.soullink.mixin.FoodDataAccessor;
+import com.soullink.mixin.InventoryAccessor;
+import com.google.common.collect.ImmutableList;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -17,8 +18,6 @@ import org.jspecify.annotations.Nullable;
 
 import net.minecraft.core.NonNullList;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.ItemStackWithSlot;
-import net.minecraft.world.entity.EntityEquipment;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.food.FoodData;
@@ -56,19 +55,21 @@ public final class LinkGroup {
 	 */
 	static final MapCodec<LinkGroup> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 			ItemStackWithSlot.CODEC.listOf().optionalFieldOf("items", List.of()).forGetter(LinkGroup::itemsWithSlots),
-			EntityEquipment.CODEC.optionalFieldOf("equipment").forGetter(group -> Optional.of(group.equipment)),
+			Codec.unboundedMap(EquipmentSlot.CODEC, ItemStack.CODEC).optionalFieldOf("equipment", Map.of()).forGetter(LinkGroup::equipmentMap),
 			FOOD_CODEC.optionalFieldOf("food").forGetter(group -> Optional.of(group.foodData)),
 			Codec.FLOAT.optionalFieldOf("health", UNKNOWN_HEALTH).forGetter(group -> group.health),
 			Codec.DOUBLE.optionalFieldOf("experience", UNKNOWN_EXPERIENCE).forGetter(group -> group.experiencePoints),
 			Codec.INT.optionalFieldOf("experienceScore", 0).forGetter(group -> group.experienceScore),
 			Codec.unboundedMap(Codec.STRING, TrinketSlotLists.CODEC).optionalFieldOf("trinkets", Map.of()).forGetter(group -> group.trinkets)
 	).apply(instance, (items, equipment, food, health, experience, experienceScore, trinkets) -> new LinkGroup(
-			items, equipment.orElseGet(EntityEquipment::new), food.orElseGet(FoodData::new), health, experience, experienceScore, trinkets)));
+			items, equipment, food.orElseGet(FoodData::new), health, experience, experienceScore, trinkets)));
 
 	static final Codec<LinkGroup> CODEC = MAP_CODEC.codec();
 
 	private final NonNullList<ItemStack> items = NonNullList.withSize(Inventory.INVENTORY_SIZE, ItemStack.EMPTY);
-	private final EntityEquipment equipment;
+	// En 1.21.1 la armadura y la mano secundaria son dos listas del Inventory (en 26.x, el EnumMap de EntityEquipment)
+	private final NonNullList<ItemStack> armor = NonNullList.withSize(EquipmentSlot.values().length - 2, ItemStack.EMPTY);
+	private final NonNullList<ItemStack> offhand = NonNullList.withSize(1, ItemStack.EMPTY);
 	private final FoodData foodData;
 	private float health;
 	private double experiencePoints;
@@ -85,14 +86,20 @@ public final class LinkGroup {
 	private int deathDropTick = -1;
 	private @Nullable ServerPlayer deathDropper;
 
-	private LinkGroup(List<ItemStackWithSlot> items, EntityEquipment equipment, FoodData foodData, float health, double experiencePoints,
+	private LinkGroup(List<ItemStackWithSlot> items, Map<EquipmentSlot, ItemStack> equipment, FoodData foodData, float health, double experiencePoints,
 			int experienceScore, Map<String, TrinketSlotLists> trinkets) {
 		for (ItemStackWithSlot item : items) {
 			if (item.isValidInContainer(this.items.size())) {
 				this.items.set(item.slot(), item.stack());
 			}
 		}
-		this.equipment = equipment;
+		equipment.forEach((slot, stack) -> {
+			if (slot == EquipmentSlot.OFFHAND) {
+				this.offhand.set(0, stack);
+			} else if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR) {
+				this.armor.set(slot.getIndex(), stack);
+			}
+		});
 		this.foodData = foodData;
 		this.health = health;
 		this.experiencePoints = experiencePoints;
@@ -106,15 +113,45 @@ public final class LinkGroup {
 	 * la duplicaría.
 	 */
 	static LinkGroup create(boolean firstGroup) {
-		return new LinkGroup(List.of(), new EntityEquipment(), new FoodData(), UNKNOWN_HEALTH, firstGroup ? UNKNOWN_EXPERIENCE : 0, 0, Map.of());
+		return new LinkGroup(List.of(), Map.of(), new FoodData(), UNKNOWN_HEALTH, firstGroup ? UNKNOWN_EXPERIENCE : 0, 0, Map.of());
 	}
 
 	public NonNullList<ItemStack> items() {
 		return this.items;
 	}
 
-	public EnumMap<EquipmentSlot, ItemStack> equipmentItems() {
-		return ((EntityEquipmentAccessor) this.equipment).soullink$getItems();
+	/**
+	 * Engancha el inventario a las listas del grupo: inventario + barra rápida, armadura y mano secundaria. En 1.21.1
+	 * las tres están además en compartments (que recorren el guardado, los ticks y la búsqueda de ítems): se rearma con
+	 * las mismas. El slot seleccionado y el ítem del cursor siguen siendo de cada jugador.
+	 */
+	public void bind(Inventory inventory) {
+		InventoryAccessor accessor = (InventoryAccessor) inventory;
+		accessor.soullink$setItems(this.items);
+		accessor.soullink$setArmor(this.armor);
+		accessor.soullink$setOffhand(this.offhand);
+		accessor.soullink$setCompartments(ImmutableList.of(this.items, this.armor, this.offhand));
+	}
+
+	public NonNullList<ItemStack> armor() {
+		return this.armor;
+	}
+
+	public NonNullList<ItemStack> offhand() {
+		return this.offhand;
+	}
+
+	private Map<EquipmentSlot, ItemStack> equipmentMap() {
+		Map<EquipmentSlot, ItemStack> result = new EnumMap<>(EquipmentSlot.class);
+		for (EquipmentSlot slot : EquipmentSlot.values()) {
+			if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR && !this.armor.get(slot.getIndex()).isEmpty()) {
+				result.put(slot, this.armor.get(slot.getIndex()));
+			}
+		}
+		if (!this.offhand.get(0).isEmpty()) {
+			result.put(EquipmentSlot.OFFHAND, this.offhand.get(0));
+		}
+		return result;
 	}
 
 	/** Las listas compartidas del slot de Trinkets con ese id, o null si nadie del grupo lo usó todavía. */
@@ -147,7 +184,7 @@ public final class LinkGroup {
 
 	/** Si {@code storage} es una de las listas o el hambre de este grupo. */
 	boolean owns(Object storage) {
-		return storage == this.items || storage == equipmentItems() || storage == this.foodData;
+		return storage == this.items || storage == this.armor || storage == this.offhand || storage == this.foodData;
 	}
 
 	public float health() {

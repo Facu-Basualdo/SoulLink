@@ -1,8 +1,25 @@
 # Soul Link — mod de Minecraft
 
-Mod de Fabric para **Minecraft Java 26.3** que hace que los jugadores vinculados compartan en tiempo real un único inventario (inventario, barra rápida, armadura y mano secundaria), una sola barra de hambre, una sola barra de vida y una sola barra de experiencia. Por defecto todos están vinculados; con `/soullink grupo` se arman grupos separados (2 y 2, o como se quiera), y cada grupo comparte lo suyo. Java 25, Gradle 9.7 + Fabric Loom 1.18, Fabric Loader 0.19.5, Fabric API 0.162.0+26.3. Toda la lógica corre en el servidor; `src/client` es sólo la pantalla de configuración de Mod Menu, opcional.
+Mod de Fabric para **Minecraft Java 1.21.1** (backport de la rama `main`, que es 26.3) que hace que los jugadores vinculados compartan en tiempo real un único inventario (inventario, barra rápida, armadura y mano secundaria), una sola barra de hambre, una sola barra de vida y una sola barra de experiencia. Por defecto todos están vinculados; con `/soullink grupo` se arman grupos separados (2 y 2, o como se quiera), y cada grupo comparte lo suyo. Java 21 (Gradle corre con el 25), Gradle 9.7 + Fabric Loom Remap 1.18.4 con los mappings oficiales de Mojang, Fabric Loader 0.18.4, Fabric API 0.116.18+1.21.1. Toda la lógica corre en el servidor; `src/client` es sólo la pantalla de configuración de Mod Menu, opcional.
 
 **El id del mod es `soullink` desde la 2.0.0 (antes `inventariocompartido`).** Lo guardado con el id viejo se pasa solo al arrancar: ver [migración del id](claude/mod/migracion-de-id.md). No lo vuelvas a cambiar sin una migración, y no renombres la marca `InventarioCompartido` del archivo de cada jugador.
+
+## Diferencias con 26.3 (rama `main`)
+
+Para portar un cambio de `main`, aplicalo, compilá y corré `runGameTest`. Lo que cambia en esta rama:
+
+- **Build:** `net.fabricmc.fabric-loom-remap` con `mappings loom.officialMojangMappings()` (1.21.1 viene ofuscado), dependencias con `modImplementation`/`modCompileOnly`, Java 21, `compatibilityLevel` `JAVA_21` en los mixins y JSpecify como `compileOnly`. Gradle sigue corriendo con el JDK 25.
+- **Todo lo de la rama `mc/1.21.11`**, más: `ResourceLocation` en vez de `Identifier`, `MobSpawnType` en vez de `EntitySpawnReason`, `hurt` en vez de `hurtServer`, `serverLevel()`, `FastColor.ARGB32` en vez de `ARGB`, los efectos con nombre viejo (`MobEffects.HEAL`), permisos de comandos con `hasPermission(n)`.
+- **SavedData:** sin `SavedDataType`: `SavedData.Factory` y `save(CompoundTag, Provider)` a mano con el mismo codec. Id como nombre de archivo, en el overworld.
+- **Pantalla de configuración:** sin `ScrollableLayout`: `ListaDesplazable` (rueda y barra arrastrable sobre `AbstractContainerWidget`).
+- **Tests:** API vieja de gametest (`FabricGameTest`, `@GameTest(template = EMPTY_STRUCTURE)` de vanilla, mensajes `String`, guardado con `CompoundTag`). Fabric API para 1.21.1 no tiene gametests de cliente: lo del cliente se prueba a mano.
+- **Inventario:** en 1.21.1 `Inventory` tiene tres listas finales (`items`, `armor`, `offhand`) y `compartments`, que las agrupa; no hay `EntityEquipment`. `LinkGroup` guarda armadura y mano secundaria como listas y `LinkGroup.bind` engancha las tres y rearma `compartments`. El invariante es el mismo: **mismo objeto de lista, nunca copias**.
+- **Dónde se engancha:** el `Inventory` se crea en un inicializador de campo, antes de que `Player` tenga perfil: el enganche va al final del constructor de `Player` (`PlayerMixin`), no en el de `Inventory`.
+- **Guardado:** con `CompoundTag`; en el archivo del jugador la armadura y la mano secundaria van en la misma lista `Inventory` (slots 100 a 103 y 150). `ItemStackWithSlot` propio (llegó en 1.21.5), con el mismo formato.
+- **Red:** 11 handlers en vez de 14: el ataque pasa por `handleInteract`, el pick block es `handlePickItem` y no hay selección de bundle.
+- **Perfiles:** `GameProfile.getId()`/`getName()` (authlib vieja).
+- **Trinkets:** el Trinkets original 3.10.0, con la misma API vieja que la rama 1.21.11 y Cardinal Components 6.1.3.
+- **Pendiente:** en unas 2 de 20 corridas el servidor de tests se colgó al cerrar (loop en `ChunkMap.processUnloads`), con todos los tests en verde. No pasó sin el tramo de Trinkets del test ni en la rama 1.21.11. Hay que probar a mano que un servidor real cierre bien con Trinkets instalado.
 
 ## Cómo obtener contexto
 

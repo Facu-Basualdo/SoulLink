@@ -2,7 +2,9 @@
 
 <p align="center"><img src="src/main/resources/assets/soullink/icon.png" alt="Soul Link" width="256"></p>
 
-Mod de Fabric para **Minecraft Java 26.3** en el que los jugadores vinculados comparten, en tiempo real:
+Mod de Fabric para **Minecraft Java 1.21.1** (también hay versión para 26.3) en el que los jugadores vinculados comparten, en tiempo real:
+
+> **Esta es la rama `mc/1.21.1`**, un backport de la versión de 26.3 (rama `main`). La lógica es la misma; los cambios de cada versión de Minecraft están en el CLAUDE.md de esta rama.
 
 - **un solo inventario**: inventario, barra rápida, armadura y mano secundaria (y los slots de Trinkets, si está instalado);
 - **una sola barra de hambre**;
@@ -114,10 +116,10 @@ El inventario, el hambre y la vida no se pueden apagar: se comparten desde que e
 
 | | Versión |
 |---|---|
-| Minecraft Java | 26.3 |
-| [Fabric Loader](https://fabricmc.net/use/) | 0.19.5 o más nuevo |
-| [Fabric API](https://modrinth.com/mod/fabric-api) | para 26.3 |
-| Java | 25 |
+| Minecraft Java | 1.21.1 |
+| [Fabric Loader](https://fabricmc.net/use/) | 0.16.0 o más nuevo |
+| [Fabric API](https://modrinth.com/mod/fabric-api) | para 1.21.1 |
+| Java | 21 |
 
 ## Instalación
 
@@ -140,7 +142,7 @@ Hasta la 1.2.1 el mod se llamaba **Inventario Compartido** y su id era `inventar
 
 - **Hero's Forge** (0.14.0 o más nuevo): los puntos de estadísticas pasan a ser de cada grupo. Con una versión anterior de Hero's Forge, Soul Link 3.0.0 no arranca: actualizá los dos.
 - **Bloodmoon & Bosses** y **Mythic Loot:** no se tocan.
-- **[Trinkets Updated](https://modrinth.com/mod/trinkets-updated)** (opcional, desde la 3.3.0): sus slots (espalda, anillos, collar…) también se comparten dentro del grupo, como la armadura. La primera vez, el primero que entra aporta los suyos y a los demás se les devuelven en el cofre, como el inventario. Sin Trinkets no cambia nada.
+- **[Trinkets](https://modrinth.com/mod/trinkets)** (opcional, desde la 3.3.0): sus slots (espalda, anillos, collar…) también se comparten dentro del grupo, como la armadura. La primera vez, el primero que entra aporta los suyos y a los demás se les devuelven en el cofre, como el inventario. Sin Trinkets no cambia nada.
 - **[Mod Menu](https://modrinth.com/mod/modmenu)** (opcional, en el cliente): la configuración se edita desde el juego. Ver [Configuración](#configuración).
 
 ## Desarrollo
@@ -148,10 +150,9 @@ Hasta la 1.2.1 el mod se llamaba **Inventario Compartido** y su id era `inventar
 ```bash
 ./gradlew build          # compila y corre las pruebas; el jar queda en build/libs/
 ./gradlew runGameTest    # sólo las pruebas automáticas, en un servidor sin ventana
-./gradlew runClientGameTest   # la pantalla de configuración en un cliente de verdad (abre una ventana)
 ```
 
-Pide Java 25: si Gradle no encuentra tu JDK, agregá `org.gradle.java.installations.paths=<ruta a tu JDK 25>` a tu `~/.gradle/gradle.properties`. La documentación técnica está en [CLAUDE.md](CLAUDE.md).
+Gradle corre con Java 25 (como la rama de 26.3) y compila para Java 21: si no encuentra tu JDK, agregá `org.gradle.java.installations.paths=<ruta a tu JDK 25>` a tu `~/.gradle/gradle.properties`. La documentación técnica está en [CLAUDE.md](CLAUDE.md).
 
 ## Licencia
 

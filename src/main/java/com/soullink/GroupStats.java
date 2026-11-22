@@ -14,13 +14,15 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import org.jspecify.annotations.Nullable;
 
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraft.world.level.saveddata.SavedDataType;
 
 /**
  * Estadísticas: cuántas veces murió cada grupo vinculado, cuánto duró cada intento y qué hizo cada jugador.
@@ -173,7 +175,10 @@ public class GroupStats extends SavedData {
 			Codec.unboundedMap(UUIDUtil.STRING_CODEC, PlayerStats.CODEC).optionalFieldOf("players", Map.of()).forGetter(stats -> stats.players)
 	).apply(instance, GroupStats::new));
 
-	private static final SavedDataType<GroupStats> TYPE = new SavedDataType<>(SoulLink.id("stats"), GroupStats::new, CODEC, null);
+	private static final String ID = SoulLink.MOD_ID + "_stats";
+	// En 1.21.1 no hay SavedDataType: se lee y se guarda a mano con el mismo codec. DataFixTypes null: Fabric API se
+	// encarga de que no se intente aplicar data fixers a datos de mods
+	private static final SavedData.Factory<GroupStats> TYPE = new SavedData.Factory<>(GroupStats::new, GroupStats::leer, null);
 
 	private final Map<String, Run> runs = new HashMap<>();
 	// Por jugador y no por grupo: si alguien cambia de grupo, sus culpas van con él.
@@ -183,6 +188,17 @@ public class GroupStats extends SavedData {
 		this(Run.fresh(), Map.of(), Map.of());
 	}
 
+	private static GroupStats leer(CompoundTag tag, HolderLookup.Provider registros) {
+		return CODEC.parse(registros.createSerializationContext(NbtOps.INSTANCE), tag).resultOrPartial(SoulLink.LOGGER::error).orElseGet(GroupStats::new);
+	}
+
+	@Override
+	public CompoundTag save(CompoundTag tag, HolderLookup.Provider registros) {
+		CODEC.encodeStart(registros.createSerializationContext(NbtOps.INSTANCE), this).resultOrPartial(SoulLink.LOGGER::error)
+				.ifPresent(guardado -> tag.merge((CompoundTag) guardado));
+		return tag;
+	}
+
 	private GroupStats(Run general, Map<String, Run> others, Map<UUID, PlayerStats> players) {
 		this.runs.putAll(others);
 		this.runs.put(SharedInventoryState.GENERAL, general);
@@ -190,7 +206,7 @@ public class GroupStats extends SavedData {
 	}
 
 	public static GroupStats get(MinecraftServer server) {
-		return server.getDataStorage().computeIfAbsent(TYPE);
+		return server.overworld().getDataStorage().computeIfAbsent(TYPE, ID);
 	}
 
 	/** END_SERVER_TICK: el reloj de cada grupo corre mientras alguno de sus jugadores esté jugando. */
@@ -259,7 +275,7 @@ public class GroupStats extends SavedData {
 	Death recordGroupDeath(String group, ServerPlayer victim, Component cause) {
 		change(victim, stats -> stats.faults++);
 		Run run = runToChange(group);
-		Death death = new Death(run.attempt, run.attemptTicks, victim.getGameProfile().name(), cause);
+		Death death = new Death(run.attempt, run.attemptTicks, victim.getGameProfile().getName(), cause);
 		run.deaths.add(death);
 		if (run.deaths.size() > HISTORY_SIZE) {
 			run.deaths.removeFirst();
@@ -280,8 +296,8 @@ public class GroupStats extends SavedData {
 	}
 
 	private void change(ServerPlayer player, Consumer<PlayerStats> change) {
-		String name = player.getGameProfile().name();
-		PlayerStats stats = this.players.computeIfAbsent(player.getGameProfile().id(), uuid -> new PlayerStats(name, 0, 0, 0, 0, 0));
+		String name = player.getGameProfile().getName();
+		PlayerStats stats = this.players.computeIfAbsent(player.getGameProfile().getId(), uuid -> new PlayerStats(name, 0, 0, 0, 0, 0));
 		stats.name = name;
 		change.accept(stats);
 		this.setDirty();

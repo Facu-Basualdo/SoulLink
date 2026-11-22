@@ -63,19 +63,19 @@ public final class SoulLinkCommand {
 
 		for (Names names : NAMES) {
 			stats.then(Commands.literal(names.reset())
-					.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+					.requires(fuente -> fuente.hasPermission(Commands.LEVEL_GAMEMASTERS))
 					.executes(SoulLinkCommand::reset));
 			root.then(Commands.literal(names.groups())
 							.executes(SoulLinkCommand::listGroups))
 					.then(Commands.literal(names.group())
-							.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+							.requires(fuente -> fuente.hasPermission(Commands.LEVEL_GAMEMASTERS))
 							.then(Commands.literal(names.remove())
 									.then(players(1, (context, players) -> move(context, players, SharedInventoryState.GENERAL))))
 							.then(Commands.argument("grupo", StringArgumentType.word())
 									.suggests((context, builder) -> SharedSuggestionProvider.suggest(groupIds(context.getSource()), builder))
 									.then(players(1, (context, players) -> move(context, players, groupArgument(context))))))
 					.then(Commands.literal(names.reload())
-							.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+							.requires(fuente -> fuente.hasPermission(Commands.LEVEL_GAMEMASTERS))
 							.executes(SoulLinkCommand::reload));
 		}
 		dispatcher.register(root.then(stats));
@@ -111,7 +111,7 @@ public final class SoulLinkCommand {
 
 	private static String ownGroup(CommandSourceStack source) {
 		ServerPlayer player = source.getPlayer();
-		return player == null ? SharedInventoryState.GENERAL : SharedInventoryState.get(source.getServer()).groupIdOf(player.getGameProfile().id());
+		return player == null ? SharedInventoryState.GENERAL : SharedInventoryState.get(source.getServer()).groupIdOf(player.getGameProfile().getId());
 	}
 
 	private static Collection<String> groupIds(CommandSourceStack source) {
@@ -178,8 +178,8 @@ public final class SoulLinkCommand {
 
 		List<String> ungrouped = new ArrayList<>();
 		for (ServerPlayer player : source.getServer().getPlayerList().getPlayers()) {
-			if (state.groupIdOf(player.getGameProfile().id()).equals(SharedInventoryState.GENERAL)) {
-				ungrouped.add(player.getGameProfile().name());
+			if (state.groupIdOf(player.getGameProfile().getId()).equals(SharedInventoryState.GENERAL)) {
+				ungrouped.add(player.getGameProfile().getName());
 			}
 		}
 		ungrouped.sort(String.CASE_INSENSITIVE_ORDER);
@@ -197,7 +197,7 @@ public final class SoulLinkCommand {
 		List<String> moved = new ArrayList<>();
 		for (ServerPlayer player : players) {
 			if (LinkGroups.move(player, group)) {
-				moved.add(player.getGameProfile().name());
+				moved.add(player.getGameProfile().getName());
 				player.sendSystemMessage((general ? Lang.tr(player, "soullink.group.left") : Lang.tr(player, "soullink.group.joined", group))
 						.withStyle(ChatFormatting.GOLD));
 				player.sendSystemMessage(Lang.tr(player, "soullink.group.left_behind").withStyle(ChatFormatting.GRAY));

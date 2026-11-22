@@ -1,11 +1,9 @@
 {
 	"required": true,
 	"package": "com.soullink.mixin",
-	"compatibilityLevel": "JAVA_25",
+	"compatibilityLevel": "JAVA_21",
 	"mixins": [
 		"AbstractContainerMenuMixin",
-		"EntityEquipmentAccessor",
-		"EntityEquipmentMixin",
 		"FoodDataAccessor",
 		"FoodDataMixin",
 		"InventoryAccessor",

@@ -38,9 +38,9 @@ public final class SwapPlaces {
 	private static ServerPlayer onlyPartner(CommandSourceStack source) throws CommandSyntaxException {
 		ServerPlayer self = source.getPlayerOrException();
 		SharedInventoryState state = SharedInventoryState.get(source.getServer());
-		String group = state.groupIdOf(self.getGameProfile().id());
+		String group = state.groupIdOf(self.getGameProfile().getId());
 		List<ServerPlayer> others = source.getServer().getPlayerList().getPlayers().stream()
-				.filter(player -> player != self && state.groupIdOf(player.getGameProfile().id()).equals(group))
+				.filter(player -> player != self && state.groupIdOf(player.getGameProfile().getId()).equals(group))
 				.toList();
 		if (others.isEmpty()) {
 			throw error(self, "soullink.swap.nobody");
@@ -78,12 +78,12 @@ public final class SwapPlaces {
 	/** Se toman las dos antes de mover a nadie: si no, el segundo iría a donde ya llegó el primero. */
 	private record Place(ServerLevel level, double x, double y, double z, float yRot, float xRot) {
 		static Place of(ServerPlayer player) {
-			return new Place(player.level(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+			return new Place(player.serverLevel(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
 		}
 
 		void moveHere(ServerPlayer player) {
 			// Igual que /tp: baja del vehículo, despierta y cambia de dimensión si hace falta.
-			player.teleportTo(this.level, this.x, this.y, this.z, Set.of(), this.yRot, this.xRot, true);
+			player.teleportTo(this.level, this.x, this.y, this.z, Set.of(), this.yRot, this.xRot);
 			// Si no, el que venía cayendo se lastima al aparecer en el piso, donde estaba el otro.
 			player.resetFallDistance();
 			if (!player.isFallFlying()) {

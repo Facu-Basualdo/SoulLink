@@ -20,7 +20,7 @@ public final class SoulLinkApi {
 
 	/** El id del grupo vinculado del jugador ({@code "general"} si no tiene uno asignado). */
 	public static String groupOf(ServerPlayer player) {
-		return SharedInventoryState.get(player.level().getServer()).groupIdOf(player.getGameProfile().id());
+		return SharedInventoryState.get(player.level().getServer()).groupIdOf(player.getGameProfile().getId());
 	}
 
 	/** Reparte ya la vida de cada grupo, en vez de esperar al fin del tick. */

@@ -27,7 +27,6 @@ public abstract class ServerGamePacketListenerImplMixin {
 					"handleUseItemOn",
 					"handleUseItem",
 					"handlePlayerAction",
-					"handleAttack",
 					"handleInteract",
 					"handleContainerClick",
 					"handleContainerClose",
@@ -35,13 +34,11 @@ public abstract class ServerGamePacketListenerImplMixin {
 					"handlePlaceRecipe",
 					"handleSelectTrade",
 					"handleSetCreativeModeSlot",
-					"handlePickItemFromBlock",
-					"handlePickItemFromEntity",
-					"handleBundleItemSelectedPacket"
+					"handlePickItem"
 			},
 			at = @At("RETURN"),
 			// Uno por handler: si un nombre cambia en otra versión, que falle al cargar en vez de dejar de sincronizar.
-			require = 14
+			require = 11
 	)
 	private void soullink$broadcastToOthers(CallbackInfo ci) {
 		SharedInventorySync.broadcastToOthers(this.player);

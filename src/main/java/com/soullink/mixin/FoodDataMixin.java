@@ -8,9 +8,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodData;
-import net.minecraft.world.level.storage.ValueInput;
 
 @Mixin(FoodData.class)
 public abstract class FoodDataMixin {
@@ -22,9 +23,10 @@ public abstract class FoodDataMixin {
 	 * por jugador del grupo y por tick: la regeneración natural y el daño por inanición irían al doble de velocidad.
 	 */
 	@Inject(method = "tick", at = @At("HEAD"), cancellable = true)
-	private void soullink$tickOncePerServerTick(ServerPlayer player, CallbackInfo ci) {
+	private void soullink$tickOncePerServerTick(Player jugador, CallbackInfo ci) {
 		SharedInventoryState state = SharedInventoryState.active();
-		if (state == null || !state.isShared(this)) {
+		// En 1.21.1 tick recibe un Player: el del cliente también pasa por acá
+		if (!(jugador instanceof ServerPlayer player) || state == null || !state.isShared(this)) {
 			return;
 		}
 		// Un jugador en creativo no gasta hambre; si se quedara con el tick, la regeneración lo curaría a él
@@ -43,7 +45,7 @@ public abstract class FoodDataMixin {
 
 	// readAdditionalSaveData() pisa el hambre compartida con la que el jugador tenía guardada.
 	@Inject(method = "readAdditionalSaveData", at = @At("HEAD"), cancellable = true)
-	private void soullink$keepSharedFood(ValueInput input, CallbackInfo ci) {
+	private void soullink$keepSharedFood(CompoundTag input, CallbackInfo ci) {
 		if (SharedInventoryState.shouldBlockLoadInto(this)) {
 			ci.cancel();
 		}

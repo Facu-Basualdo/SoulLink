@@ -6,8 +6,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
-import com.soullink.mixin.EntityEquipmentAccessor;
-import com.soullink.mixin.InventoryAccessor;
 import com.soullink.mixin.PlayerAccessor;
 import org.jspecify.annotations.Nullable;
 
@@ -41,20 +39,18 @@ public final class LinkGroups {
 	/** @return false si ya estaba en ese grupo */
 	public static boolean move(ServerPlayer player, String groupId) {
 		SharedInventoryState state = SharedInventoryState.get(player.level().getServer());
-		if (state.groupIdOf(player.getGameProfile().id()).equals(groupId)) {
+		if (state.groupIdOf(player.getGameProfile().getId()).equals(groupId)) {
 			return false;
 		}
 		// Si no, el próximo reparto le contaría al grupo viejo la diferencia con la vida del nuevo como daño
 		state.groupOf(player).forget(player);
-		state.setGroupOf(player.getGameProfile().id(), player.getGameProfile().name(), groupId);
+		state.setGroupOf(player.getGameProfile().getId(), player.getGameProfile().getName(), groupId);
 		LinkGroup group = state.groupOf(player);
 		group.forget(player);
 
 		// Lo mismo que hacen los mixins en el constructor, pero sobre un jugador que ya existe. No se crea un
 		// ServerPlayer nuevo con PlayerList.respawn: restoreFrom copiaría el inventario viejo en las listas nuevas
-		InventoryAccessor inventory = (InventoryAccessor) player.getInventory();
-		inventory.soullink$setItems(group.items());
-		((EntityEquipmentAccessor) inventory.soullink$getEquipment()).soullink$setItems(group.equipmentItems());
+		group.bind(player.getInventory());
 		((PlayerAccessor) player).soullink$setFoodData(group.foodData());
 
 		// broadcastChanges sólo manda lo que cambió en un slot y acá cambió la lista entera: se manda todo

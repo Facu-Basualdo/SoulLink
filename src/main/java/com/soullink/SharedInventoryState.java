@@ -15,13 +15,15 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import org.jspecify.annotations.Nullable;
 
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraft.world.level.saveddata.SavedDataType;
 
 /**
  * Los grupos vinculados del mundo y quién está en cada uno. Lo que comparte cada grupo está en {@link LinkGroup}.
@@ -54,9 +56,10 @@ public class SharedInventoryState extends SavedData {
 			Codec.BOOL.optionalFieldOf("trinketsInitialized", false).forGetter(state -> state.trinketsInitialized)
 	).apply(instance, SharedInventoryState::new));
 
-	// DataFixTypes null: Fabric API se encarga de que no se intente aplicar data fixers a datos de mods.
-	private static final SavedDataType<SharedInventoryState> TYPE = new SavedDataType<>(
-			SoulLink.id("shared_inventory"), SharedInventoryState::new, CODEC, null);
+	private static final String ID = SoulLink.MOD_ID + "_shared_inventory";
+	// En 1.21.1 no hay SavedDataType: se lee y se guarda a mano con el mismo codec. DataFixTypes null: Fabric API se
+	// encarga de que no se intente aplicar data fixers a datos de mods
+	private static final SavedData.Factory<SharedInventoryState> TYPE = new SavedData.Factory<>(SharedInventoryState::new, SharedInventoryState::leer, null);
 
 	// Estado del servidor que está corriendo ahora. Lo usan los mixins que no tienen acceso al servidor.
 	private static @Nullable SharedInventoryState active;
@@ -80,6 +83,17 @@ public class SharedInventoryState extends SavedData {
 		this(LinkGroup.create(true), false, Map.of(), Map.of(), false);
 	}
 
+	private static SharedInventoryState leer(CompoundTag tag, HolderLookup.Provider registros) {
+		return CODEC.parse(registros.createSerializationContext(NbtOps.INSTANCE), tag).resultOrPartial(SoulLink.LOGGER::error).orElseGet(SharedInventoryState::new);
+	}
+
+	@Override
+	public CompoundTag save(CompoundTag tag, HolderLookup.Provider registros) {
+		CODEC.encodeStart(registros.createSerializationContext(NbtOps.INSTANCE), this).resultOrPartial(SoulLink.LOGGER::error)
+				.ifPresent(guardado -> tag.merge((CompoundTag) guardado));
+		return tag;
+	}
+
 	private SharedInventoryState(LinkGroup general, boolean initialized, Map<String, LinkGroup> others, Map<UUID, Member> members,
 			boolean trinketsInitialized) {
 		this.groups.put(GENERAL, general);
@@ -94,7 +108,7 @@ public class SharedInventoryState extends SavedData {
 	}
 
 	public static SharedInventoryState get(MinecraftServer server) {
-		SharedInventoryState state = server.getDataStorage().computeIfAbsent(TYPE);
+		SharedInventoryState state = server.overworld().getDataStorage().computeIfAbsent(TYPE, ID);
 		active = state;
 		return state;
 	}
@@ -143,7 +157,7 @@ public class SharedInventoryState extends SavedData {
 	}
 
 	public LinkGroup groupOf(Player player) {
-		return group(groupIdOf(player.getGameProfile().id()));
+		return group(groupIdOf(player.getGameProfile().getId()));
 	}
 
 	public String groupIdOf(UUID player) {
@@ -184,7 +198,7 @@ public class SharedInventoryState extends SavedData {
 	public Map<String, List<ServerPlayer>> onlineByGroup(List<ServerPlayer> players) {
 		Map<String, List<ServerPlayer>> result = new LinkedHashMap<>();
 		for (ServerPlayer player : players) {
-			result.computeIfAbsent(groupIdOf(player.getGameProfile().id()), unused -> new ArrayList<>()).add(player);
+			result.computeIfAbsent(groupIdOf(player.getGameProfile().getId()), unused -> new ArrayList<>()).add(player);
 		}
 		return result;
 	}

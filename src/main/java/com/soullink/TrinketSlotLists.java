@@ -7,7 +7,6 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.NonNullList;
-import net.minecraft.world.ItemStackWithSlot;
 import net.minecraft.world.item.ItemStack;
 
 /**

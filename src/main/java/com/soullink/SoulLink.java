@@ -10,7 +10,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.monster.Enemy;
@@ -38,7 +38,6 @@ public class SoulLink implements ModInitializer {
 		}
 
 		// Antes que todo: con el id viejo, el estado compartido está en otra carpeta
-		ServerLifecycleEvents.SERVER_STARTING.register(IdMigration::migrateWorldData);
 
 		// El primer jugador que entra al mundo (con el mod recién instalado) aporta su inventario
 		// como punto de partida. A partir de ahí, el inventario compartido es la única fuente de verdad.
@@ -103,7 +102,7 @@ public class SoulLink implements ModInitializer {
 		return FabricLoader.getInstance().getConfigDir().resolve(MOD_ID + ".json");
 	}
 
-	public static Identifier id(String path) {
-		return Identifier.fromNamespaceAndPath(MOD_ID, path);
+	public static ResourceLocation id(String path) {
+		return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
 	}
 }

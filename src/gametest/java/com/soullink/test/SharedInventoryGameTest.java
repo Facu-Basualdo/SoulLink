@@ -2,6 +2,7 @@ package com.soullink.test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -15,41 +16,36 @@ import com.soullink.LinkGroups;
 import com.soullink.SharedInventoryState;
 import com.soullink.StatsScoreboard;
 
-import eu.pb4.trinkets.api.DefaultTrinketSlots;
-import eu.pb4.trinkets.api.TrinketInventory;
-import eu.pb4.trinkets.api.TrinketsApi;
+import dev.emi.trinkets.api.TrinketInventory;
+import dev.emi.trinkets.api.TrinketsApi;
 
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.fabricmc.fabric.api.gametest.v1.FabricGameTest;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.NonNullList;
+import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.Connection;
-import net.minecraft.network.HashedStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.players.PlayerList;
-import net.minecraft.util.ProblemReporter;
-import net.minecraft.world.ItemStackWithSlot;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityEquipment;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ExperienceOrb;
-import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerSynchronizer;
-import net.minecraft.world.inventory.RemoteSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -57,15 +53,13 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
-import net.minecraft.world.level.storage.TagValueInput;
-import net.minecraft.world.level.storage.TagValueOutput;
-import net.minecraft.world.scores.ScoreHolder;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.ScoreHolder;
 
-public class SharedInventoryGameTest {
+public class SharedInventoryGameTest implements FabricGameTest {
 	// Un solo test: lo compartido es global del servidor, así que tests en paralelo se pisarían.
 	// La vida se reparte al final de cada tick, por eso los pasos van en una secuencia con thenIdle(1).
-	@GameTest(maxTicks = 150)
+	@GameTest(template = EMPTY_STRUCTURE, timeoutTicks = 150)
 	public void playersShareInventoryHungerAndHealth(GameTestHelper helper) {
 		PlayerList playerList = helper.getLevel().getServer().getPlayerList();
 		ServerPlayer a = joinSurvivalPlayer(helper, "jugador-a");
@@ -88,12 +82,11 @@ public class SharedInventoryGameTest {
 					// Lo que tira A le llega a B en el momento, no en el próximo tick de B
 					a.getInventory().clearContent();
 					a.getInventory().setItem(0, new ItemStack(Items.COBBLESTONE, 10));
-					a.getInventory().setSelectedSlot(0);
-					a.connection.handleAcceptPlayerLoad(new ServerboundPlayerLoadedPacket()); // si no, handlePlayerAction ignora el paquete
+					a.getInventory().selected = 0;
 					RecordingSynchronizer sentToB = new RecordingSynchronizer();
 					b.containerMenu.setSynchronizer(sentToB); // marca los 10 como ya enviados
 					a.connection.handlePlayerAction(new ServerboundPlayerActionPacket(ServerboundPlayerActionPacket.Action.DROP_ITEM, BlockPos.ZERO, Direction.DOWN));
-					helper.assertTrue(sentToB.sent(Items.COBBLESTONE, 9), Component.literal("B recibe el slot con 9 piedras sin esperar a su tick"));
+					helper.assertTrue(sentToB.sent(Items.COBBLESTONE, 9), "B recibe el slot con 9 piedras sin esperar a su tick");
 					helper.getLevel().getEntitiesOfClass(ItemEntity.class, a.getBoundingBox().inflate(5)).forEach(Entity::discard);
 					a.getInventory().clearContent();
 
@@ -102,16 +95,16 @@ public class SharedInventoryGameTest {
 					helper.getLevel().setBlockAndUpdate(log, Blocks.OAK_LOG.defaultBlockState());
 					b.setPos(log.getX() + 0.5, log.getY(), log.getZ() + 1.5);
 					a.getInventory().setItem(0, new ItemStack(Items.IRON_AXE));
-					b.getInventory().setSelectedSlot(0);
+					b.getInventory().selected = 0;
 					RecordingSynchronizer sentToMiner = new RecordingSynchronizer();
 					b.containerMenu.setSynchronizer(sentToMiner);
-					b.gameMode.handleBlockBreakAction(log, ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, Direction.SOUTH, helper.getLevel().getMaxY(), 0);
+					b.gameMode.handleBlockBreakAction(log, ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, Direction.SOUTH, helper.getLevel().getMaxBuildHeight(), 0);
 					a.getMainHandItem().setDamageValue(1);
 					b.containerMenu.broadcastChanges();
-					helper.assertFalse(sentToMiner.sentDamaged(Items.IRON_AXE, 1), Component.literal("B no recibe el hacha gastada mientras pica con ella"));
-					b.gameMode.handleBlockBreakAction(log, ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, Direction.SOUTH, helper.getLevel().getMaxY(), 0);
+					helper.assertFalse(sentToMiner.sentDamaged(Items.IRON_AXE, 1), "B no recibe el hacha gastada mientras pica con ella");
+					b.gameMode.handleBlockBreakAction(log, ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, Direction.SOUTH, helper.getLevel().getMaxBuildHeight(), 0);
 					b.containerMenu.broadcastChanges();
-					helper.assertTrue(sentToMiner.sentDamaged(Items.IRON_AXE, 1), Component.literal("B recibe el hacha gastada cuando deja de picar"));
+					helper.assertTrue(sentToMiner.sentDamaged(Items.IRON_AXE, 1), "B recibe el hacha gastada cuando deja de picar");
 					helper.getLevel().removeBlock(log, false);
 					a.getInventory().clearContent();
 
@@ -123,59 +116,56 @@ public class SharedInventoryGameTest {
 
 					// Armadura y mano secundaria
 					a.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
-					helper.assertTrue(b.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET), Component.literal("B tiene puesto el casco que se puso A"));
+					helper.assertTrue(b.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET), "B tiene puesto el casco que se puso A");
 					b.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
-					helper.assertTrue(a.getOffhandItem().is(Items.SHIELD), Component.literal("A tiene el escudo que B puso en la mano secundaria"));
+					helper.assertTrue(a.getOffhandItem().is(Items.SHIELD), "A tiene el escudo que B puso en la mano secundaria");
 
 					// Cargar los datos guardados (viejos) de un jugador no pisa lo compartido
-					TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, a.registryAccess());
-					a.saveWithoutId(output);
-					CompoundTag oldSave = output.buildResult();
+					CompoundTag oldSave = a.saveWithoutId(new CompoundTag());
 					oldSave.remove("UUID"); // si no, B queda con el UUID de A
 					a.getInventory().add(new ItemStack(Items.EMERALD, 7));
 					a.getFoodData().setFoodLevel(15);
-					b.load(TagValueInput.create(ProblemReporter.DISCARDING, b.registryAccess(), oldSave));
+					b.load(oldSave);
 					assertCount(helper, a, Items.EMERALD, 7, "Cargar datos viejos de B no borra las esmeraldas nuevas");
-					helper.assertTrue(a.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET), Component.literal("Cargar datos viejos no borra la armadura compartida"));
+					helper.assertTrue(a.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET), "Cargar datos viejos no borra la armadura compartida");
 					assertFood(helper, b, 15, "Cargar datos viejos no pisa el hambre compartida");
 
 					// Hambre: es el mismo objeto
-					helper.assertTrue(a.getFoodData() == b.getFoodData(), Component.literal("A y B usan el mismo FoodData"));
+					helper.assertTrue(a.getFoodData() == b.getFoodData(), "A y B usan el mismo FoodData");
 					a.getFoodData().setFoodLevel(7);
 					assertFood(helper, b, 7, "B ve el hambre de A");
 
 					// Jugador con partida de antes del mod: sus ítems no entran al inventario compartido…
-					TagValueOutput personal = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, a.registryAccess());
-					personal.list("Inventory", ItemStackWithSlot.CODEC).add(new ItemStackWithSlot(0, new ItemStack(Items.GOLDEN_APPLE, 3)));
-					EntityEquipment personalEquipment = new EntityEquipment();
-					personalEquipment.set(EquipmentSlot.FEET, new ItemStack(Items.DIAMOND_BOOTS));
-					personal.store("equipment", EntityEquipment.CODEC, personalEquipment);
+					// En 1.21.1 la armadura va en la misma lista que el inventario: las botas en el slot 100
+					CompoundTag personal = new CompoundTag();
+					ListTag personalInventory = new ListTag();
+					personalInventory.add(withSlot(new ItemStack(Items.GOLDEN_APPLE, 3), 0, a));
+					personalInventory.add(withSlot(new ItemStack(Items.DIAMOND_BOOTS), 100, a));
+					personal.put("Inventory", personalInventory);
 					personal.putInt("XpLevel", 3);
-					veteran[0] = joinSurvivalPlayer(helper, "jugador-c", personal.buildResult(), helper.absolutePos(new BlockPos(1, 1, 1)));
+					veteran[0] = joinSurvivalPlayer(helper, "jugador-c", personal, helper.absolutePos(new BlockPos(1, 1, 1)));
 					assertCount(helper, a, Items.GOLDEN_APPLE, 0, "Las manzanas de antes del mod no entran al inventario compartido");
-					helper.assertFalse(a.getItemBySlot(EquipmentSlot.FEET).is(Items.DIAMOND_BOOTS), Component.literal("Las botas de antes del mod no entran a la armadura compartida"));
+					helper.assertFalse(a.getItemBySlot(EquipmentSlot.FEET).is(Items.DIAMOND_BOOTS), "Las botas de antes del mod no entran a la armadura compartida");
 				})
 				.thenIdle(1)
 				.thenExecute(() -> {
 					// …sino a un cofre al lado suyo
 					ServerPlayer c = veteran[0];
-					helper.assertTrue(countChests(c) == 1, Component.literal("Aparece un cofre al lado del jugador (hay " + countChests(c) + ")"));
-					helper.assertTrue(countInChests(c, Items.GOLDEN_APPLE) == 3, Component.literal("El cofre tiene las 3 manzanas"));
-					helper.assertTrue(countInChests(c, Items.DIAMOND_BOOTS) == 1, Component.literal("El cofre tiene las botas"));
+					helper.assertTrue(countChests(c) == 1, "Aparece un cofre al lado del jugador (hay " + countChests(c) + ")");
+					helper.assertTrue(countInChests(c, Items.GOLDEN_APPLE) == 3, "El cofre tiene las 3 manzanas");
+					helper.assertTrue(countInChests(c, Items.DIAMOND_BOOTS) == 1, "El cofre tiene las botas");
 					// Su experiencia no se pierde: se suma a la compartida
 					assertLevel(helper, a, 3, "A recibe los 3 niveles de antes del mod de C");
 
 					// Un archivo guardado con el mod ya tiene la marca: entrar de nuevo no crea otro cofre
-					TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, c.registryAccess());
-					c.saveWithoutId(output);
-					CompoundTag sharedSave = output.buildResult();
+					CompoundTag sharedSave = c.saveWithoutId(new CompoundTag());
 					sharedSave.remove("UUID");
 					playerList.remove(c);
 					veteran[0] = joinSurvivalPlayer(helper, "jugador-c-otra-vez", sharedSave, helper.absolutePos(new BlockPos(1, 1, 1)));
 				})
 				.thenIdle(1)
 				.thenExecute(() -> {
-					helper.assertTrue(countChests(veteran[0]) == 1, Component.literal("Reingresar con un archivo marcado no crea otro cofre (hay " + countChests(veteran[0]) + ")"));
+					helper.assertTrue(countChests(veteran[0]) == 1, "Reingresar con un archivo marcado no crea otro cofre (hay " + countChests(veteran[0]) + ")");
 					playerList.remove(veteran[0]);
 				})
 				.thenIdle(1)
@@ -187,8 +177,8 @@ public class SharedInventoryGameTest {
 				.thenExecute(() -> {
 					assertHealth(helper, b, 10, "B recibe el daño de A");
 					float lost = stat(stats, a).heartsLost() * 2;
-					helper.assertTrue(lost == healthBefore[0] - 10, Component.literal("A suma a sus estadísticas la vida que perdió (" + lost + ", esperado " + (healthBefore[0] - 10) + ")"));
-					helper.assertTrue(stat(stats, b).heartsLost() == 0, Component.literal("B no suma la vida que perdió por el golpe de A"));
+					helper.assertTrue(lost == healthBefore[0] - 10, "A suma a sus estadísticas la vida que perdió (" + lost + ", esperado " + (healthBefore[0] - 10) + ")");
+					helper.assertTrue(stat(stats, b).heartsLost() == 0, "B no suma la vida que perdió por el golpe de A");
 					b.heal(4);
 				})
 				.thenIdle(1)
@@ -225,8 +215,8 @@ public class SharedInventoryGameTest {
 				.thenExecute(() -> {
 					assertLevel(helper, respawned[0], 4, "A recibe la experiencia de B");
 					assertLevel(helper, b, 4, "B recibe la experiencia de A");
-					helper.assertTrue(Math.abs(stat(stats, a).experience() - 20) < 0.01, Component.literal("A suma los 20 puntos que juntó (" + stat(stats, a).experience() + ")"));
-					helper.assertTrue(Math.abs(stat(stats, b).experience() - 5) < 0.01, Component.literal("B suma los 5 puntos que juntó (" + stat(stats, b).experience() + ")"));
+					helper.assertTrue(Math.abs(stat(stats, a).experience() - 20) < 0.01, "A suma los 20 puntos que juntó (" + stat(stats, a).experience() + ")");
+					helper.assertTrue(Math.abs(stat(stats, b).experience() - 5) < 0.01, "B suma los 5 puntos que juntó (" + stat(stats, b).experience() + ")");
 					// Gastar niveles (encantar, yunque) también se comparte
 					b.giveExperienceLevels(-1);
 					// Un golpe que deja al grupo con 2 corazones o menos es un susto de quien lo recibió
@@ -235,19 +225,19 @@ public class SharedInventoryGameTest {
 				.thenIdle(1)
 				.thenExecute(() -> {
 					assertLevel(helper, respawned[0], 3, "A ve los niveles que gastó B");
-					helper.assertTrue(Math.abs(stat(stats, b).experience() - 5) < 0.01, Component.literal("Gastar niveles no le resta a B la experiencia juntada"));
-					helper.assertTrue(GroupStats.Stat.SCARES.of(stat(stats, b)) == 1, Component.literal("B suma un susto"));
-					helper.assertTrue(GroupStats.Stat.SCARES.of(stat(stats, a)) == 0, Component.literal("A no suma el susto de B"));
+					helper.assertTrue(Math.abs(stat(stats, b).experience() - 5) < 0.01, "Gastar niveles no le resta a B la experiencia juntada");
+					helper.assertTrue(GroupStats.Stat.SCARES.of(stat(stats, b)) == 1, "B suma un susto");
+					helper.assertTrue(GroupStats.Stat.SCARES.of(stat(stats, a)) == 0, "A no suma el susto de B");
 					b.setHealth(9);
 
 					// Matar un monstruo le suma al que lo mató
-					Zombie zombie = EntityTypes.ZOMBIE.create(helper.getLevel(), EntitySpawnReason.COMMAND);
+					Zombie zombie = EntityType.ZOMBIE.create(helper.getLevel());
 					BlockPos zombiePos = helper.absolutePos(new BlockPos(3, 1, 3));
 					zombie.setPos(zombiePos.getX() + 0.5, zombiePos.getY(), zombiePos.getZ() + 0.5);
 					helper.getLevel().addFreshEntity(zombie);
-					zombie.hurtServer(helper.getLevel(), b.damageSources().playerAttack(b), 1000);
-					helper.assertTrue(GroupStats.Stat.MOBS.of(stat(stats, b)) == 1, Component.literal("B suma el zombi que mató"));
-					helper.assertTrue(GroupStats.Stat.MOBS.of(stat(stats, a)) == 0, Component.literal("A no suma el zombi de B"));
+					zombie.hurt(b.damageSources().playerAttack(b), 1000);
+					helper.assertTrue(GroupStats.Stat.MOBS.of(stat(stats, b)) == 1, "B suma el zombi que mató");
+					helper.assertTrue(GroupStats.Stat.MOBS.of(stat(stats, a)) == 0, "A no suma el zombi de B");
 					// Lo que suelta el zombi se contaría como lo que tira el grupo al morir, más abajo
 					zombie.discard();
 					helper.getLevel().getEntitiesOfClass(Entity.class, zombie.getBoundingBox().inflate(4), e -> e instanceof ItemEntity || e instanceof ExperienceOrb).forEach(Entity::discard);
@@ -261,12 +251,12 @@ public class SharedInventoryGameTest {
 					ServerLevel nether = overworld.getServer().getLevel(Level.NETHER);
 					Vec3 inOverworld = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(1, 1, 1)));
 					Vec3 inNether = new Vec3(0.5, 100, 0.5);
-					respawned[0].teleportTo(overworld, inOverworld.x, inOverworld.y, inOverworld.z, Set.of(), 0, 0, true);
-					b.teleportTo(nether, inNether.x, inNether.y, inNether.z, Set.of(), 90, 0, true);
+					respawned[0].teleportTo(overworld, inOverworld.x, inOverworld.y, inOverworld.z, Set.of(), 0, 0);
+					b.teleportTo(nether, inNether.x, inNether.y, inNether.z, Set.of(), 90, 0);
 					runCommand(respawned[0], "intercambiar");
 					assertAt(helper, respawned[0], nether, inNether, "A queda donde estaba B, en el Nether");
 					assertAt(helper, b, overworld, inOverworld, "B queda donde estaba A");
-					helper.assertTrue(respawned[0].getYRot() == 90, Component.literal("A mira para donde miraba B (yRot " + respawned[0].getYRot() + ")"));
+					helper.assertTrue(respawned[0].getYRot() == 90, "A mira para donde miraba B (yRot " + respawned[0].getYRot() + ")");
 
 					// …y nombrando al compañero
 					runCommand(respawned[0], "swap jugador-b"); // el mismo comando en inglés
@@ -280,32 +270,32 @@ public class SharedInventoryGameTest {
 					BlockPos here = helper.absolutePos(new BlockPos(1, 1, 1));
 					BlockPos away = helper.absolutePos(new BlockPos(1, 1, 12));
 					respawned[0].teleportTo(here.getX() + 0.5, here.getY(), here.getZ() + 0.5);
-					b.teleportTo(overworld, away.getX() + 0.5, away.getY(), away.getZ() + 0.5, Set.of(), 0, 0, true); // vuelve del Nether
+					b.teleportTo(overworld, away.getX() + 0.5, away.getY(), away.getZ() + 0.5, Set.of(), 0, 0); // vuelve del Nether
 					respawned[0].setHealth(4);
 					b.setHealth(5);
 				})
 				.thenIdle(1)
 				.thenExecute(() -> {
-					helper.assertTrue(b.isDeadOrDying(), Component.literal("B muere cuando muere A"));
-					helper.assertTrue(respawned[0].isDeadOrDying(), Component.literal("A muere por los golpes de los dos"));
-					helper.assertTrue(b.getInventory().isEmpty(), Component.literal("Tras la muerte del grupo, el inventario compartido queda vacío"));
-					helper.assertTrue(countDropped(respawned[0], Items.EMERALD) == 7, Component.literal("Las esmeraldas caen una vez al lado de A, que recibió más daño"));
-					helper.assertTrue(countDropped(b, Items.EMERALD) == 0, Component.literal("Al lado de B no cae nada"));
-					helper.assertTrue(droppedExperience(respawned[0]) == 21, Component.literal("A tira la experiencia del grupo una vez (tiró " + droppedExperience(respawned[0]) + ")"));
-					helper.assertTrue(droppedExperience(b) == 0, Component.literal("B no tira otra copia de la experiencia"));
-					helper.assertTrue(SharedInventoryState.get(helper.getLevel().getServer()).group(SharedInventoryState.GENERAL).experiencePoints() == 0, Component.literal("La experiencia compartida se pierde al morir"));
+					helper.assertTrue(b.isDeadOrDying(), "B muere cuando muere A");
+					helper.assertTrue(respawned[0].isDeadOrDying(), "A muere por los golpes de los dos");
+					helper.assertTrue(b.getInventory().isEmpty(), "Tras la muerte del grupo, el inventario compartido queda vacío");
+					helper.assertTrue(countDropped(respawned[0], Items.EMERALD) == 7, "Las esmeraldas caen una vez al lado de A, que recibió más daño");
+					helper.assertTrue(countDropped(b, Items.EMERALD) == 0, "Al lado de B no cae nada");
+					helper.assertTrue(droppedExperience(respawned[0]) == 21, "A tira la experiencia del grupo una vez (tiró " + droppedExperience(respawned[0]) + ")");
+					helper.assertTrue(droppedExperience(b) == 0, "B no tira otra copia de la experiencia");
+					helper.assertTrue(SharedInventoryState.get(helper.getLevel().getServer()).group(SharedInventoryState.GENERAL).experiencePoints() == 0, "La experiencia compartida se pierde al morir");
 					assertFood(helper, b, 20, "El hambre compartida se reinicia al morir");
 
 					// La muerte queda en las estadísticas: culpa de A, que recibió más daño, y arranca otro intento
-					helper.assertTrue(stats.run(SharedInventoryState.GENERAL).attempt() == attemptBefore + 1, Component.literal("Arranca el intento siguiente (" + stats.run(SharedInventoryState.GENERAL).attempt() + ", antes " + attemptBefore + ")"));
-					helper.assertTrue(stats.run(SharedInventoryState.GENERAL).attemptTicks() == 0, Component.literal("El reloj del intento nuevo arranca en 0 y no corre con todos muertos"));
-					helper.assertTrue(GroupStats.Stat.FAULTS.of(stat(stats, a)) == 1, Component.literal("La culpa es de A"));
-					helper.assertTrue(GroupStats.Stat.FAULTS.of(stat(stats, b)) == 0, Component.literal("B no tiene la culpa"));
+					helper.assertTrue(stats.run(SharedInventoryState.GENERAL).attempt() == attemptBefore + 1, "Arranca el intento siguiente (" + stats.run(SharedInventoryState.GENERAL).attempt() + ", antes " + attemptBefore + ")");
+					helper.assertTrue(stats.run(SharedInventoryState.GENERAL).attemptTicks() == 0, "El reloj del intento nuevo arranca en 0 y no corre con todos muertos");
+					helper.assertTrue(GroupStats.Stat.FAULTS.of(stat(stats, a)) == 1, "La culpa es de A");
+					helper.assertTrue(GroupStats.Stat.FAULTS.of(stat(stats, b)) == 0, "B no tiene la culpa");
 					GroupStats.Death death = stats.run(SharedInventoryState.GENERAL).deaths().getLast();
-					helper.assertTrue(death.victim().equals("jugador-a") && death.attempt() == attemptBefore, Component.literal("La última muerte es de A en el intento " + attemptBefore + " (" + death + ")"));
+					helper.assertTrue(death.victim().equals("jugador-a") && death.attempt() == attemptBefore, "La última muerte es de A en el intento " + attemptBefore + " (" + death + ")");
 					var culpas = helper.getLevel().getServer().getScoreboard().getObjective(StatsScoreboard.objectiveName(GroupStats.Stat.FAULTS));
 					helper.assertTrue(culpas != null && helper.getLevel().getServer().getScoreboard().getOrCreatePlayerScore(ScoreHolder.forNameOnly("jugador-a"), culpas).get() == 1,
-							Component.literal("El scoreboard muestra la culpa de A"));
+							"El scoreboard muestra la culpa de A");
 					helper.getLevel().getEntitiesOfClass(Entity.class, b.getBoundingBox().inflate(20), e -> e instanceof ItemEntity || e instanceof ExperienceOrb).forEach(Entity::discard);
 					playerList.remove(respawned[0]);
 					playerList.remove(b);
@@ -324,8 +314,8 @@ public class SharedInventoryGameTest {
 					assertLevel(helper, four[3], 3, "Sin grupos, los cuatro comparten la experiencia");
 					runServerCommand(helper, "soullink grupo " + red + " grupo-0 grupo-1");
 					runServerCommand(helper, "soullink group " + blue + " grupo-2 grupo-3"); // en inglés
-					helper.assertTrue(world.groupIdOf(four[1].getGameProfile().id()).equals(red) && world.groupIdOf(four[3].getGameProfile().id()).equals(blue),
-							Component.literal("/soullink grupo arma los dos grupos"));
+					helper.assertTrue(world.groupIdOf(four[1].getGameProfile().getId()).equals(red) && world.groupIdOf(four[3].getGameProfile().getId()).equals(blue),
+							"/soullink grupo arma los dos grupos");
 
 					four[0].getInventory().add(new ItemStack(Items.DIAMOND, 2));
 					four[2].getInventory().add(new ItemStack(Items.EMERALD, 3));
@@ -334,13 +324,13 @@ public class SharedInventoryGameTest {
 					assertCount(helper, four[3], Items.EMERALD, 3, "El compañero de azul ve las esmeraldas");
 					assertCount(helper, four[0], Items.EMERALD, 0, "Rojo no ve las esmeraldas de azul");
 					helper.assertTrue(four[0].getFoodData() == four[1].getFoodData() && four[0].getFoodData() != four[2].getFoodData(),
-							Component.literal("Cada grupo tiene su hambre"));
+							"Cada grupo tiene su hambre");
 				})
 				.thenIdle(1)
 				.thenExecute(() -> {
 					assertLevel(helper, four[0], 0, "Un grupo nuevo arranca sin experiencia: la del general no se duplica");
 					helper.assertTrue(Math.abs(world.group(SharedInventoryState.GENERAL).experiencePoints() - 30) < 0.01,
-							Component.literal("La experiencia queda en el general (" + world.group(SharedInventoryState.GENERAL).experiencePoints() + ")"));
+							"La experiencia queda en el general (" + world.group(SharedInventoryState.GENERAL).experiencePoints() + ")");
 					healthBefore[0] = four[2].getHealth();
 					four[0].setHealth(10);
 				})
@@ -355,11 +345,11 @@ public class SharedInventoryGameTest {
 				})
 				.thenIdle(1)
 				.thenExecute(() -> {
-					helper.assertTrue(four[3].isDeadOrDying(), Component.literal("Muere el compañero de azul"));
-					helper.assertFalse(four[0].isDeadOrDying() || four[1].isDeadOrDying(), Component.literal("Rojo sigue vivo"));
+					helper.assertTrue(four[3].isDeadOrDying(), "Muere el compañero de azul");
+					helper.assertFalse(four[0].isDeadOrDying() || four[1].isDeadOrDying(), "Rojo sigue vivo");
 					helper.assertTrue(stats.run(blue).attempt() == 2 && stats.run(red).attempt() == 1,
-							Component.literal("Azul pasa al intento 2 y rojo sigue en el 1 (" + stats.run(blue).attempt() + ", " + stats.run(red).attempt() + ")"));
-					helper.assertTrue(stats.run(SharedInventoryState.GENERAL).attempt() == attemptBefore + 1, Component.literal("La muerte de azul no cuenta en el general"));
+							"Azul pasa al intento 2 y rojo sigue en el 1 (" + stats.run(blue).attempt() + ", " + stats.run(red).attempt() + ")");
+					helper.assertTrue(stats.run(SharedInventoryState.GENERAL).attempt() == attemptBefore + 1, "La muerte de azul no cuenta en el general");
 
 					// El jugador recreado sigue en su grupo
 					ServerPlayer recreated = playerList.respawn(four[0], true, Entity.RemovalReason.CHANGED_DIMENSION);
@@ -369,10 +359,10 @@ public class SharedInventoryGameTest {
 
 					// Al salir del grupo no se lleva nada: los diamantes se quedan en rojo
 					runServerCommand(helper, "soullink grupo quitar grupo-1");
-					helper.assertTrue(world.groupIdOf(four[1].getGameProfile().id()).equals(SharedInventoryState.GENERAL), Component.literal("grupo-1 vuelve al general"));
+					helper.assertTrue(world.groupIdOf(four[1].getGameProfile().getId()).equals(SharedInventoryState.GENERAL), "grupo-1 vuelve al general");
 					assertCount(helper, four[1], Items.DIAMOND, 0, "El que sale de rojo no se lleva los diamantes");
 					assertCount(helper, four[0], Items.DIAMOND, 2, "Los diamantes siguen en rojo");
-					helper.assertTrue(four[1].getFoodData() == world.group(SharedInventoryState.GENERAL).foodData(), Component.literal("El que sale usa el hambre del general"));
+					helper.assertTrue(four[1].getFoodData() == world.group(SharedInventoryState.GENERAL).foodData(), "El que sale usa el hambre del general");
 
 					for (ServerPlayer player : four) {
 						playerList.remove(player);
@@ -389,36 +379,36 @@ public class SharedInventoryGameTest {
 					// Con Trinkets Updated los slots de Trinkets se comparten igual que la armadura
 					ServerPlayer c = joinSurvivalPlayer(helper, "trinkets-c");
 					ServerPlayer d = joinSurvivalPlayer(helper, "trinkets-d");
-					TrinketInventory backC = TrinketsApi.getAttachment(c).getInventory(DefaultTrinketSlots.CHEST_BACK);
-					helper.assertTrue(backC != null && TrinketsApi.getAttachment(d).getInventory(DefaultTrinketSlots.CHEST_BACK) != null,
-							Component.literal("Los jugadores tienen el slot de espalda (data de prueba en src/gametest/resources)"));
+					TrinketInventory backC = back(c);
+					helper.assertTrue(backC != null && back(d) != null,
+							"Los jugadores tienen el slot de espalda (data de prueba en src/gametest/resources)");
 					backC.clearContent();
 					backC.setItem(0, new ItemStack(Items.ELYTRA));
-					helper.assertTrue(back(d).getItem(0) == backC.getItem(0), Component.literal("D tiene en la espalda la misma elytra que se puso C"));
+					helper.assertTrue(back(d).getItem(0) == backC.getItem(0), "D tiene en la espalda la misma elytra que se puso C");
 
 					// Cargar el archivo de D no pisa lo compartido
-					TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, d.registryAccess());
-					d.saveWithoutId(output);
-					CompoundTag oldSave = output.buildResult();
+					CompoundTag oldSave = d.saveWithoutId(new CompoundTag());
 					oldSave.remove("UUID");
 					backC.setItem(0, new ItemStack(Items.TOTEM_OF_UNDYING));
-					d.load(TagValueInput.create(ProblemReporter.DISCARDING, d.registryAccess(), oldSave));
+					// Una copia en cada carga: Cardinal Components (con el que Trinkets guarda en 1.21.x) consume su clave
+					// del tag al leerlo, y en un login de verdad cada carga lee el archivo de nuevo
+					d.load(oldSave.copy());
 					helper.assertTrue(back(c).getItem(0).is(Items.TOTEM_OF_UNDYING) && back(d).getItem(0) == back(c).getItem(0),
-							Component.literal("Cargar un guardado de D no pisa el slot compartido"));
-					helper.assertTrue(world.takeRescuedItems(d.getGameProfile().id()).isEmpty(), Component.literal("Un guardado con la marca no rescata nada"));
+							"Cargar un guardado de D no pisa el slot compartido");
+					helper.assertTrue(world.takeRescuedItems(d.getGameProfile().getId()).isEmpty(), "Un guardado con la marca no rescata nada");
 
 					// Un archivo de antes de compartir los trinkets: lo suyo va al cofre, no a lo compartido
 					oldSave.remove("SoulLinkTrinkets");
-					d.load(TagValueInput.create(ProblemReporter.DISCARDING, d.registryAccess(), oldSave));
-					helper.assertTrue(back(c).getItem(0).is(Items.TOTEM_OF_UNDYING), Component.literal("Un guardado sin la marca tampoco pisa el slot"));
-					helper.assertTrue(world.takeRescuedItems(d.getGameProfile().id()).stream().anyMatch(stack -> stack.is(Items.ELYTRA)),
-							Component.literal("La elytra del guardado sin la marca queda para el cofre"));
+					d.load(oldSave.copy());
+					helper.assertTrue(back(c).getItem(0).is(Items.TOTEM_OF_UNDYING), "Un guardado sin la marca tampoco pisa el slot");
+					helper.assertTrue(world.takeRescuedItems(d.getGameProfile().getId()).stream().anyMatch(stack -> stack.is(Items.ELYTRA)),
+							"La elytra del guardado sin la marca queda para el cofre");
 
 					// En otro grupo no se comparte, y el totem se queda con el grupo de C
 					LinkGroups.move(d, "tr-" + suffix);
-					helper.assertTrue(back(d).getItem(0).isEmpty(), Component.literal("En el grupo nuevo D tiene la espalda vacía"));
+					helper.assertTrue(back(d).getItem(0).isEmpty(), "En el grupo nuevo D tiene la espalda vacía");
 					back(d).setItem(0, new ItemStack(Items.ELYTRA));
-					helper.assertTrue(back(c).getItem(0).is(Items.TOTEM_OF_UNDYING), Component.literal("Lo que se pone D en el grupo nuevo no le llega a C"));
+					helper.assertTrue(back(c).getItem(0).is(Items.TOTEM_OF_UNDYING), "Lo que se pone D en el grupo nuevo no le llega a C");
 
 					back(c).clearContent();
 					back(d).clearContent();
@@ -442,7 +432,7 @@ public class SharedInventoryGameTest {
 		CommonListenerCookie cookie = CommonListenerCookie.createInitial(new GameProfile(UUID.randomUUID(), name), false);
 		ServerPlayer player = new ServerPlayer(level.getServer(), level, cookie.gameProfile(), cookie.clientInformation());
 		if (savedData != null) {
-			player.load(TagValueInput.create(ProblemReporter.DISCARDING, player.registryAccess(), savedData));
+			player.load(savedData);
 		}
 		if (pos != null) {
 			player.setPos(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
@@ -454,8 +444,11 @@ public class SharedInventoryGameTest {
 		return player;
 	}
 
-	private static TrinketInventory back(ServerPlayer player) {
-		return TrinketsApi.getAttachment(player).getInventory(DefaultTrinketSlots.CHEST_BACK);
+	/** El slot de espalda (grupo "chest", slot "back"), o null si el jugador no lo tiene. */
+	private static @Nullable TrinketInventory back(ServerPlayer player) {
+		return TrinketsApi.getTrinketComponent(player)
+				.map(component -> component.getInventory().getOrDefault("chest", Map.of()).get("back"))
+				.orElse(null);
 	}
 
 	private static List<ChestBlockEntity> chestsAround(ServerPlayer player) {
@@ -493,7 +486,7 @@ public class SharedInventoryGameTest {
 		}
 
 		@Override
-		public void sendInitialData(AbstractContainerMenu menu, List<ItemStack> slots, ItemStack carried, int[] dataSlots) {
+		public void sendInitialData(AbstractContainerMenu menu, NonNullList<ItemStack> slots, ItemStack carried, int[] dataSlots) {
 		}
 
 		@Override
@@ -508,31 +501,17 @@ public class SharedInventoryGameTest {
 		@Override
 		public void sendDataChange(AbstractContainerMenu menu, int id, int value) {
 		}
+	}
 
-		@Override
-		public RemoteSlot createSlot() {
-			return new RemoteSlot() {
-				private ItemStack last = ItemStack.EMPTY;
-
-				@Override
-				public void force(ItemStack stack) {
-					this.last = stack.copy();
-				}
-
-				@Override
-				public void receive(HashedStack stack) {
-				}
-
-				@Override
-				public boolean matches(ItemStack stack) {
-					return ItemStack.matches(this.last, stack);
-				}
-			};
-		}
+	/** Un ítem como lo guarda 1.21.1 en la lista "Inventory" del jugador. */
+	private static CompoundTag withSlot(ItemStack stack, int slot, ServerPlayer player) {
+		CompoundTag tag = (CompoundTag) stack.save(player.registryAccess());
+		tag.putByte("Slot", (byte) slot);
+		return tag;
 	}
 
 	private static GroupStats.PlayerStats stat(GroupStats stats, ServerPlayer player) {
-		GroupStats.PlayerStats found = stats.of(player.getGameProfile().id());
+		GroupStats.PlayerStats found = stats.of(player.getGameProfile().getId());
 		return found != null ? found : GroupStats.PlayerStats.EMPTY;
 	}
 
@@ -558,25 +537,25 @@ public class SharedInventoryGameTest {
 
 	private static void assertAt(GameTestHelper helper, ServerPlayer player, ServerLevel level, Vec3 expected, String message) {
 		boolean there = player.level() == level && player.position().distanceTo(expected) < 0.01;
-		helper.assertTrue(there, Component.literal(message + " (está en " + player.level().dimension().identifier() + " " + player.position() + ")"));
+		helper.assertTrue(there, message + " (está en " + player.level().dimension().location() + " " + player.position() + ")");
 	}
 
 	private static void assertLevel(GameTestHelper helper, Player player, int expected, String message) {
-		helper.assertTrue(player.experienceLevel == expected, Component.literal(message + " (nivel " + player.experienceLevel + ", esperado " + expected + ")"));
+		helper.assertTrue(player.experienceLevel == expected, message + " (nivel " + player.experienceLevel + ", esperado " + expected + ")");
 	}
 
 	private static void assertCount(GameTestHelper helper, Player player, Item item, int expected, String message) {
 		int actual = player.getInventory().countItem(item);
-		helper.assertTrue(actual == expected, Component.literal(message + " (esperado " + expected + ", hay " + actual + ")"));
+		helper.assertTrue(actual == expected, message + " (esperado " + expected + ", hay " + actual + ")");
 	}
 
 	private static void assertHealth(GameTestHelper helper, Player player, float expected, String message) {
 		float actual = player.getHealth();
-		helper.assertTrue(actual == expected, Component.literal(message + " (esperado " + expected + ", hay " + actual + ")"));
+		helper.assertTrue(actual == expected, message + " (esperado " + expected + ", hay " + actual + ")");
 	}
 
 	private static void assertFood(GameTestHelper helper, Player player, int expected, String message) {
 		int actual = player.getFoodData().getFoodLevel();
-		helper.assertTrue(actual == expected, Component.literal(message + " (esperado " + expected + ", hay " + actual + ")"));
+		helper.assertTrue(actual == expected, message + " (esperado " + expected + ", hay " + actual + ")");
 	}
 }

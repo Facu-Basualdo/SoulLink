@@ -28,12 +28,12 @@ public final class PersonalItemsChest {
 	}
 
 	public static void placeRescuedItems(ServerPlayer player) {
-		List<ItemStack> items = SharedInventoryState.get(player.level().getServer()).takeRescuedItems(player.getGameProfile().id());
+		List<ItemStack> items = SharedInventoryState.get(player.level().getServer()).takeRescuedItems(player.getGameProfile().getId());
 		if (items.isEmpty()) {
 			return;
 		}
 
-		ServerLevel level = player.level();
+		ServerLevel level = player.serverLevel();
 		List<BlockPos> chests = new ArrayList<>();
 		int next = 0;
 		while (next < items.size()) {
@@ -57,7 +57,7 @@ public final class PersonalItemsChest {
 		}
 
 		SoulLink.LOGGER.info("Ítems de antes del mod de {} devueltos en {} cofre(s){}",
-				player.getGameProfile().name(), chests.size(), dropped ? " y tirados a sus pies" : "");
+				player.getGameProfile().getName(), chests.size(), dropped ? " y tirados a sus pies" : "");
 
 		// El próximo guardado del jugador lleva la marca y ya no vuelve a rescatar estos ítems. Si el cofre
 		// no estuviera en disco antes que eso, una caída del servidor lo borraría y los ítems se perderían.
