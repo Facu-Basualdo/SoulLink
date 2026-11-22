@@ -68,6 +68,7 @@ El mismo tema en distintas áreas usa el mismo nombre de archivo (`claude/mod/in
 - **Si la feature se nota en el juego, actualizá el `README.md`** (la lista de qué se comparte, la tabla "Cómo funciona en el juego" y lo que verifican las pruebas): es lo que lee quien instala el mod, y `/docs` sólo toca `claude/`.
 - **Antes de dar algo por terminado corré `gradlew runGameTest`**: compila no alcanza, los mixins recién se aplican en runtime.
 - **Con cada cambio que se pueda notar en el juego, subí `version` en `gradle.properties`** (sale en el nombre del jar y en `fabric.mod.json`): minor (`1.1.0` → `1.2.0`) para una feature nueva, patch (`1.1.0` → `1.1.1`) para un arreglo. Si es otra versión, el jar viejo y el nuevo no se confunden en la carpeta `mods/`.
+- **Con cada versión nueva, agregá su sección `## <versión>` en `CHANGELOG.md`**, en inglés y pensada para quien juega: es el changelog que `gradlew publishMods` sube a CurseForge, y sin ella la publicación falla. Subir es sólo `gradlew publishMods` con el token de CurseForge en `~/.gradle/gradle.properties` (`curseforgeToken`) o en `CURSEFORGE_TOKEN`; sin token corre en seco y no sube nada. Publicá sólo si te lo piden.
 - **No commitees ni pushees salvo que te lo pidan.**
 - Mensajes, comentarios y docs en **español rioplatense** (vos), como el resto del proyecto.
 
